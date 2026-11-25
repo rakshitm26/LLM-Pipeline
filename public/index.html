@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Python LLM Pipeline & Tutorials</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/atom-one-dark.min.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen flex flex-col font-sans">
+
+  <!-- Navigation Bar -->
+  <header class="border-b border-slate-800 bg-slate-950/80 backdrop-blur sticky top-0 z-50">
+    <div class="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
+      <div class="flex items-center space-x-3">
+        <span class="text-2xl text-amber-500"><i class="fa-solid fa-bolt"></i></span>
+        <div>
+          <h1 class="font-bold text-lg leading-tight">Python LLM Pipeline</h1>
+          <p class="text-xs text-slate-400">Powered by Groq & Serverless Vercel</p>
+        </div>
+      </div>
+      <div class="flex items-center space-x-4">
+        <a href="/docs" target="_blank" class="text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 px-3 py-1.5 rounded-md border border-slate-700 transition flex items-center gap-1.5">
+          <i class="fa-solid fa-code"></i> API Docs (/docs)
+        </a>
+        <span class="inline-flex items-center gap-1.5 text-xs text-emerald-400 bg-emerald-950/50 border border-emerald-800/60 px-2.5 py-1 rounded-full">
+          <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> Vercel Ready
+        </span>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <main class="max-w-6xl mx-auto px-4 py-8 flex-1 w-full">
+    
+    <!-- Tab Controls -->
+    <div class="flex space-x-2 border-b border-slate-800 mb-6 pb-2">
+      <button onclick="switchTab('chat')" id="tab-btn-chat" class="px-4 py-2 font-medium text-sm rounded-lg transition text-amber-400 bg-slate-800 flex items-center gap-2">
+        <i class="fa-regular fa-comment-dots"></i> Live Chat
+      </button>
+      <button onclick="switchTab('tutorials')" id="tab-btn-tutorials" class="px-4 py-2 font-medium text-sm rounded-lg transition text-slate-400 hover:text-slate-200 hover:bg-slate-800/50 flex items-center gap-2">
+        <i class="fa-solid fa-graduation-cap"></i> Tutorial Generator
+      </button>
+      <button onclick="switchTab('rag')" id="tab-btn-rag" class="px-4 py-2 font-medium text-sm rounded-lg transition text-slate-400 hover:text-slate-200 hover:bg-slate-800/50 flex items-center gap-2">
+        <i class="fa-solid fa-database"></i> Knowledge Base (RAG)
+      </button>
+    </div>
+
+    <!-- TAB 1: CHAT -->
+    <section id="tab-chat" class="block">
+      <div class="bg-slate-950 border border-slate-800 rounded-xl flex flex-col h-[650px] shadow-xl overflow-hidden">
+        <!-- Message Feed -->
+        <div id="chat-messages" class="flex-1 overflow-y-auto p-4 space-y-4">
+          <div class="flex items-start gap-3">
+            <div class="w-8 h-8 rounded-full bg-amber-500/20 text-amber-400 flex items-center justify-center flex-shrink-0 text-sm">
+              <i class="fa-solid fa-robot"></i>
+            </div>
+            <div class="bg-slate-900 border border-slate-800 rounded-2xl rounded-tl-none p-3.5 max-w-[85%] text-sm leading-relaxed">
+              Hello! I'm your Python AI Assistant powered by Groq on Vercel. Ask me anything about Python syntax, algorithms, data structures, or frameworks!
+            </div>
+          </div>
+        </div>
+
+        <!-- Input Bar -->
+        <div class="p-3 border-t border-slate-800 bg-slate-950 flex items-center gap-2">
+          <input type="text" id="chat-input" placeholder="Ask a question (e.g. 'How do Python decorators work?')" 
+            class="flex-1 bg-slate-900 border border-slate-800 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:border-amber-500 text-slate-100 placeholder-slate-500"
+            onkeydown="if(event.key === 'Enter') sendChatMessage()">
+          <button onclick="sendChatMessage()" id="chat-send-btn" class="bg-amber-500 hover:bg-amber-400 text-slate-950 font-semibold px-4 py-2.5 rounded-lg text-sm transition flex items-center gap-1.5">
+            <span>Send</span> <i class="fa-solid fa-paper-plane text-xs"></i>
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 2: TUTORIAL GENERATOR -->
+    <section id="tab-tutorials" class="hidden">
+      <div class="bg-slate-950 border border-slate-800 rounded-xl p-6 shadow-xl mb-6">
+        <h2 class="text-lg font-semibold text-white mb-1">Generate Structured Python Curriculum</h2>
+        <p class="text-xs text-slate-400 mb-4">Leverages Pydantic validation on Groq to extract step-by-step code guides.</p>
+        
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+          <div class="md:col-span-3">
+            <label class="block text-xs font-medium text-slate-400 mb-1">Topic</label>
+            <input type="text" id="tut-topic" value="Asyncio Tasks and Gathering" placeholder="e.g. SQLite with Python, Generators, FastAPI" 
+              class="w-full bg-slate-900 border border-slate-800 rounded-lg px-3.5 py-2 text-sm focus:outline-none focus:border-amber-500">
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-400 mb-1">Difficulty</label>
+            <select id="tut-difficulty" class="w-full bg-slate-900 border border-slate-800 rounded-lg px-3.5 py-2 text-sm focus:outline-none focus:border-amber-500">
+              <option value="Beginner">Beginner</option>
+              <option value="Intermediate" selected>Intermediate</option>
+              <option value="Advanced">Advanced</option>
+            </select>
+          </div>
+        </div>
+        <button onclick="generateTutorial()" id="tut-btn" class="bg-amber-500 hover:bg-amber-400 text-slate-950 font-semibold px-5 py-2 rounded-lg text-sm transition">
+          Generate Tutorial
+        </button>
+      </div>
+
+      <div id="tut-output" class="hidden bg-slate-950 border border-slate-800 rounded-xl p-6 shadow-xl"></div>
+    </section>
+
+    <!-- TAB 3: RAG -->
+    <section id="tab-rag" class="hidden">
+      <div class="bg-slate-950 border border-slate-800 rounded-xl p-6 shadow-xl">
+        <h2 class="text-lg font-semibold text-white mb-1">Semantic Knowledge Base (RAG)</h2>
+        <p class="text-xs text-slate-400 mb-4">Query ingested documents from the serverless context.</p>
+
+        <div class="flex gap-2 mb-6">
+          <input type="text" id="rag-query" value="What is LlamaIndex?" placeholder="Ask a question..."
+            class="flex-1 bg-slate-900 border border-slate-800 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:border-amber-500">
+          <button onclick="queryRAG()" id="rag-btn" class="bg-amber-500 hover:bg-amber-400 text-slate-950 font-semibold px-5 py-2.5 rounded-lg text-sm transition">
+            Search
+          </button>
+        </div>
+
+        <div id="rag-result" class="hidden bg-slate-900 border border-slate-800 rounded-lg p-5">
+          <h3 class="text-xs uppercase tracking-wider text-amber-400 font-bold mb-2">Retrieved Answer</h3>
+          <p id="rag-text" class="text-sm leading-relaxed text-slate-200"></p>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <script>
+    // Tab Switching
+    function switchTab(tab) {
+      ['chat', 'tutorials', 'rag'].forEach(t => {
+        const content = document.getElementById('tab-' + t);
+        const btn = document.getElementById('tab-btn-' + t);
+        if (t === tab) {
+          content.classList.remove('hidden');
+          btn.classList.add('text-amber-400', 'bg-slate-800');
+          btn.classList.remove('text-slate-400');
+        } else {
+          content.classList.add('hidden');
+          btn.classList.remove('text-amber-400', 'bg-slate-800');
+          btn.classList.add('text-slate-400');
+        }
+      });
+    }
+
+    // Chat functionality with streaming
+    async function sendChatMessage() {
+      const input = document.getElementById('chat-input');
+      const text = input.value.trim();
+      if (!text) return;
+      input.value = '';
+
+      const container = document.getElementById('chat-messages');
+      
+      // User message
+      container.innerHTML += `
+        <div class="flex items-start justify-end gap-3">
+          <div class="bg-amber-500/10 border border-amber-500/30 text-amber-200 rounded-2xl rounded-tr-none p-3.5 max-w-[85%] text-sm">
+            ${marked.parse(text)}
+          </div>
+          <div class="w-8 h-8 rounded-full bg-slate-800 text-slate-300 flex items-center justify-center flex-shrink-0 text-sm">
+            <i class="fa-solid fa-user"></i>
+          </div>
+        </div>
+      `;
+      container.scrollTop = container.scrollHeight;
+
+      // Assistant placeholder
+      const msgId = 'bot-msg-' + Date.now();
+      container.innerHTML += `
+        <div class="flex items-start gap-3">
+          <div class="w-8 h-8 rounded-full bg-amber-500/20 text-amber-400 flex items-center justify-center flex-shrink-0 text-sm">
+            <i class="fa-solid fa-robot"></i>
+          </div>
+          <div id="${msgId}" class="bg-slate-900 border border-slate-800 rounded-2xl rounded-tl-none p-3.5 max-w-[85%] text-sm leading-relaxed">
+            <span class="inline-block animate-pulse">Thinking...</span>
+          </div>
+        </div>
+      `;
+      container.scrollTop = container.scrollHeight;
+
+      const botElement = document.getElementById(msgId);
+      let accumulated = "";
+
+      try {
+        const res = await fetch('/api/chat/stream', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ prompt: text })
+        });
+
+        if (!res.ok) {
+          throw new Error('API request failed: ' + res.statusText);
+        }
+
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        botElement.innerHTML = "";
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          const chunk = decoder.decode(value);
+          const lines = chunk.split('\n');
+          for (const line of lines) {
+            if (line.startsWith('data: ') && line !== 'data: [DONE]') {
+              accumulated += line.replace('data: ', '');
+              botElement.innerHTML = marked.parse(accumulated);
+              container.scrollTop = container.scrollHeight;
+            }
+          }
+        }
+        hljs.highlightAll();
+      } catch (err) {
+        botElement.innerHTML = `<span class="text-red-400">Error: ${err.message}</span>`;
+      }
+    }
+
+    // Tutorial Generator
+    async function generateTutorial() {
+      const topic = document.getElementById('tut-topic').value.trim();
+      const diff = document.getElementById('tut-difficulty').value;
+      const btn = document.getElementById('tut-btn');
+      const output = document.getElementById('tut-output');
+
+      if (!topic) return;
+      btn.disabled = true;
+      btn.innerText = 'Generating with Groq...';
+      output.classList.remove('hidden');
+      output.innerHTML = '<div class="text-sm text-slate-400 animate-pulse">Crafting step-by-step curriculum...</div>';
+
+      try {
+        const res = await fetch('/api/tutorial', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ topic, difficulty: diff })
+        });
+        const data = await res.json();
+        
+        let html = `
+          <h2 class="text-xl font-bold text-amber-400 mb-1">${data.title}</h2>
+          <div class="flex gap-2 text-xs mb-3">
+            <span class="bg-slate-800 text-slate-300 px-2 py-0.5 rounded">Difficulty: ${data.difficulty}</span>
+          </div>
+          <p class="text-sm text-slate-300 mb-3">${data.summary}</p>
+          <div class="text-xs text-slate-400 mb-6"><strong>Prerequisites:</strong> ${data.prerequisites.join(', ')}</div>
+          <div class="space-y-6">
+        `;
+
+        data.steps.forEach(s => {
+          html += `
+            <div class="border border-slate-800 rounded-lg p-4 bg-slate-900/60">
+              <h3 class="font-semibold text-white text-sm mb-1">Step ${s.step_number}: ${s.title}</h3>
+              <p class="text-xs text-slate-400 mb-3">${s.explanation}</p>
+              <pre class="rounded-lg text-xs overflow-x-auto"><code class="language-python">${escapeHtml(s.code)}</code></pre>
+            </div>
+          `;
+        });
+        html += '</div>';
+
+        output.innerHTML = html;
+        hljs.highlightAll();
+      } catch (err) {
+        output.innerHTML = `<div class="text-sm text-red-400">Failed: ${err.message}</div>`;
+      } finally {
+        btn.disabled = false;
+        btn.innerText = 'Generate Tutorial';
+      }
+    }
+
+    // RAG Query
+    async function queryRAG() {
+      const q = document.getElementById('rag-query').value.trim();
+      const btn = document.getElementById('rag-btn');
+      const box = document.getElementById('rag-result');
+      const text = document.getElementById('rag-text');
+
+      if (!q) return;
+      btn.disabled = true;
+      btn.innerText = 'Searching...';
+
+      try {
+        const res = await fetch('/api/rag', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ query: q })
+        });
+        const data = await res.json();
+        box.classList.remove('hidden');
+        text.innerText = data.answer;
+      } catch (err) {
+        box.classList.remove('hidden');
+        text.innerText = 'Error: ' + err.message;
+      } finally {
+        btn.disabled = false;
+        btn.innerText = 'Search';
+      }
+    }
+
+    function escapeHtml(str) {
+      return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    }
+  </script>
+</body>
+</html>
