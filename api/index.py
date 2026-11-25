@@ -2,14 +2,12 @@ import os
 import sys
 from pathlib import Path
 from typing import Optional, List
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
-from fastapi.staticfiles import StaticFiles
+from fastapi.responses import StreamingResponse, JSONResponse
 from pydantic import BaseModel, Field
 from openai import OpenAI
 
-# Initialize FastAPI
 app = FastAPI(
     title="Python LLM Pipeline API",
     description="Serverless LLM Pipeline with Groq & OpenAI on Vercel",
@@ -24,20 +22,19 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-def get_client_and_model():
-    """Retrieve credentials from Vercel environment."""
+def get_credentials():
+    """Retrieve API key and model from environment."""
     api_key = os.getenv("GROQ_API_KEY") or os.getenv("OPENAI_API_KEY")
     if not api_key:
-        # Fallback for local testing if .env exists
-        from dotenv import load_dotenv
-        load_dotenv()
-        api_key = os.getenv("GROQ_API_KEY") or os.getenv("OPENAI_API_KEY")
+        try:
+            from dotenv import load_dotenv
+            load_dotenv()
+            api_key = os.getenv("GROQ_API_KEY") or os.getenv("OPENAI_API_KEY")
+        except Exception:
+            pass
 
-    if not api_key:
-        raise HTTPException(
-            status_code=500,
-            detail="GROQ_API_KEY is not set in environment variables. Please add it in Vercel Project Settings > Environment Variables."
-        )
+    if not api_key or "your-" in api_key:
+        return None, None, None
 
     api_key = api_key.strip()
     if api_key.startswith("gsk_"):
@@ -47,20 +44,19 @@ def get_client_and_model():
         base_url = "https://api.openai.com/v1"
         model = os.getenv("CHAT_MODEL") or "gpt-4o-mini"
 
-    client = OpenAI(api_key=api_key, base_url=base_url)
-    return client, model
+    return api_key, base_url, model
 
 # Schemas
 class ChatRequest(BaseModel):
     prompt: str
-    system_prompt: Optional[str] = "You are an expert Python coding instructor. Provide concise, high quality responses with code examples."
+    system_prompt: Optional[str] = "You are an expert Python coding instructor. Provide concise, high quality responses with clean code examples."
     temperature: Optional[float] = 0.7
 
 class TutorialStep(BaseModel):
-    step_number: int = Field(description="Sequential order of step")
+    step_number: int = Field(description="Order of step")
     title: str = Field(description="Step title")
     code: str = Field(description="Python code snippet")
-    explanation: str = Field(description="Explanation of the step")
+    explanation: str = Field(description="Summary of purpose")
 
 class TutorialArticle(BaseModel):
     title: str
@@ -76,7 +72,6 @@ class TutorialRequest(BaseModel):
 class RAGRequest(BaseModel):
     query: str
 
-# In-memory document storage for serverless RAG
 DEFAULT_KNOWLEDGE = [
     "LlamaIndex is a powerful data framework connecting custom data sources to Large Language Models (LLMs).",
     "Groq provides ultra-low latency LPU (Language Processing Unit) inference for open-source AI models.",
@@ -85,15 +80,39 @@ DEFAULT_KNOWLEDGE = [
     "Vercel is a cloud platform for frontend frameworks and serverless functions, supporting instantaneous edge deployments.",
 ]
 
+def missing_key_response():
+    return JSONResponse(
+        status_code=400,
+        content={
+            "error": "GROQ_API_KEY is not configured in Vercel environment variables.",
+            "help": "Please go to Vercel Dashboard -> Project Settings -> Environment Variables, add GROQ_API_KEY with your 'gsk_...' key, and redeploy."
+        }
+    )
+
+# Routes defined for both /api/* and root /* to ensure seamless Vercel rewrites
+
+@app.get("/")
+@app.get("/health")
 @app.get("/api/health")
 def health():
-    client, model = get_client_and_model()
-    return {"status": "ok", "model": model}
+    api_key, _, model = get_credentials()
+    configured = bool(api_key)
+    return {
+        "status": "ok",
+        "configured": configured,
+        "model": model if configured else "Not configured",
+        "provider": "Groq" if api_key and api_key.startswith("gsk_") else ("OpenAI" if api_key else "None")
+    }
 
+@app.post("/chat")
 @app.post("/api/chat")
-def chat(req: ChatRequest):
-    client, model = get_client_and_model()
+def chat_endpoint(req: ChatRequest):
+    api_key, base_url, model = get_credentials()
+    if not api_key:
+        return missing_key_response()
+
     try:
+        client = OpenAI(api_key=api_key, base_url=base_url)
         response = client.chat.completions.create(
             model=model,
             messages=[
@@ -104,12 +123,21 @@ def chat(req: ChatRequest):
         )
         return {"response": response.choices[0].message.content}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        return JSONResponse(status_code=400, content={"error": str(e)})
 
+@app.post("/chat/stream")
 @app.post("/api/chat/stream")
-def chat_stream(req: ChatRequest):
-    client, model = get_client_and_model()
+def chat_stream_endpoint(req: ChatRequest):
+    api_key, base_url, model = get_credentials()
+    if not api_key:
+        def err_stream():
+            yield "data: ⚠️ **Error:** `GROQ_API_KEY` is missing in Vercel Environment Variables.\n\n"
+            yield "data: Please go to **Vercel Dashboard** ➔ **Settings** ➔ **Environment Variables**, add `GROQ_API_KEY`, and redeploy.\n\n"
+            yield "data: [DONE]\n\n"
+        return StreamingResponse(err_stream(), media_type="text/event-stream")
+
     try:
+        client = OpenAI(api_key=api_key, base_url=base_url)
         def generate():
             stream = client.chat.completions.create(
                 model=model,
@@ -128,12 +156,20 @@ def chat_stream(req: ChatRequest):
 
         return StreamingResponse(generate(), media_type="text/event-stream")
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        def exc_stream():
+            yield f"data: ⚠️ Error from AI provider: {str(e)}\n\n"
+            yield "data: [DONE]\n\n"
+        return StreamingResponse(exc_stream(), media_type="text/event-stream")
 
-@app.post("/api/tutorial", response_model=TutorialArticle)
-def generate_tutorial(req: TutorialRequest):
-    client, model = get_client_and_model()
+@app.post("/tutorial")
+@app.post("/api/tutorial")
+def generate_tutorial_endpoint(req: TutorialRequest):
+    api_key, base_url, model = get_credentials()
+    if not api_key:
+        return missing_key_response()
+
     try:
+        client = OpenAI(api_key=api_key, base_url=base_url)
         completion = client.beta.chat.completions.parse(
             model=model,
             messages=[
@@ -150,14 +186,17 @@ def generate_tutorial(req: TutorialRequest):
         )
         return completion.choices[0].message.parsed
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        return JSONResponse(status_code=400, content={"error": str(e)})
 
+@app.post("/rag")
 @app.post("/api/rag")
-def rag_search(req: RAGRequest):
-    """Serverless RAG using contextual passage matching."""
-    client, model = get_client_and_model()
+def rag_search_endpoint(req: RAGRequest):
+    api_key, base_url, model = get_credentials()
+    if not api_key:
+        return missing_key_response()
+
     try:
-        # Check local data files if available
+        client = OpenAI(api_key=api_key, base_url=base_url)
         context_docs = list(DEFAULT_KNOWLEDGE)
         data_path = Path(__file__).resolve().parent.parent / "data"
         if data_path.exists():
@@ -186,4 +225,4 @@ def rag_search(req: RAGRequest):
         )
         return {"query": req.query, "answer": response.choices[0].message.content}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        return JSONResponse(status_code=400, content={"error": str(e)})

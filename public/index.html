@@ -36,6 +36,15 @@
   <!-- Main Container -->
   <main class="max-w-6xl mx-auto px-4 py-8 flex-1 w-full">
     
+    <!-- Config Warning Banner -->
+    <div id="env-alert" class="hidden mb-6 bg-amber-500/15 border border-amber-500/40 text-amber-300 rounded-xl p-4 flex items-start gap-3">
+      <i class="fa-solid fa-triangle-exclamation text-amber-400 mt-0.5"></i>
+      <div class="text-xs leading-relaxed">
+        <strong>GROQ_API_KEY Missing:</strong> Your Vercel deployment needs your Groq key.
+        Go to <strong>Vercel Dashboard</strong> &rarr; <strong>Settings</strong> &rarr; <strong>Environment Variables</strong>, add <code>GROQ_API_KEY</code>, and click <strong>Redeploy</strong>.
+      </div>
+    </div>
+    
     <!-- Tab Controls -->
     <div class="flex space-x-2 border-b border-slate-800 mb-6 pb-2">
       <button onclick="switchTab('chat')" id="tab-btn-chat" class="px-4 py-2 font-medium text-sm rounded-lg transition text-amber-400 bg-slate-800 flex items-center gap-2">
@@ -129,6 +138,19 @@
   </main>
 
   <script>
+    // Check backend health on load
+    window.addEventListener('DOMContentLoaded', async () => {
+      try {
+        const res = await fetch('/api/health');
+        if (res.ok) {
+          const data = await res.json();
+          if (!data.configured) {
+            document.getElementById('env-alert').classList.remove('hidden');
+          }
+        }
+      } catch (e) {}
+    });
+
     // Tab Switching
     function switchTab(tab) {
       ['chat', 'tutorials', 'rag'].forEach(t => {
@@ -193,7 +215,8 @@
         });
 
         if (!res.ok) {
-          throw new Error('API request failed: ' + res.statusText);
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.error || errData.help || ('HTTP ' + res.status));
         }
 
         const reader = res.body.getReader();
